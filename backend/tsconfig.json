@@ -1,0 +1,11 @@
+{
+  "name": "feedback-backend",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev src/server.ts",
+    "build": "tsc"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
