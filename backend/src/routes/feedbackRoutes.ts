@@ -1,8 +1,8 @@
 import express from "express";
-import {
-  createFeedback,
-  getFeedbacks
-} from "../controllers/feedbackController";
+// import {
+//   createFeedback,
+//   getFeedbacks
+// } from "../controllers/feedbackController";
 import { protect, adminOnly } from "../middleware/authMiddleware";
 
 const router = express.Router();
@@ -12,13 +12,13 @@ const router = express.Router();
  * @desc    Create feedback (AI analyzed)
  * @access  Public (or protect if you want only logged users)
  */
-router.post("/", createFeedback);
+// router.post("/", createFeedback);
 
-/**
- * @route   GET /api/feedbacks
- * @desc    Get all feedbacks
- * @access  Admin only
- */
-router.get("/", protect, adminOnly, getFeedbacks);
+// /**
+//  * @route   GET /api/feedbacks
+//  * @desc    Get all feedbacks
+//  * @access  Admin only
+//  */
+// router.get("/", protect, adminOnly, getFeedbacks);
 
 export default router;
