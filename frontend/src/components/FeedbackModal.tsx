@@ -1,62 +1,66 @@
 import { useState } from "react";
-import { api } from "../services/api";
+import api from "../api/api";
+import toast from "react-hot-toast";
+import type { FC } from "react";
 
 interface FeedbackModalProps {
-  onClose: () => void;
+  onClose: () => void;       // a function that closes the modal
+  onCreated: () => void;     // a function that runs after feedback is created
 }
 
-export default function FeedbackModal({ onClose }: FeedbackModalProps) {
+const FeedbackModal: FC<FeedbackModalProps> = ({ onClose, onCreated }) => {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    message: ""
+    message: "",
   });
 
   const submit = async () => {
-    await api.post("/feedbacks", form);
-    onClose();
-    window.location.reload();
+    try {
+      await api.post("/feedback", form);
+      toast.success("Feedback created");
+      onCreated();
+      onClose();
+    } catch {
+      toast.error("Error creating feedback");
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-        <h2 className="text-lg font-semibold mb-4">Submit Feedback</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+      <div className="bg-white p-6 rounded-lg w-96">
+        <h2 className="text-lg font-bold mb-4">Create Feedback</h2>
 
         <input
-          className="w-full border p-2 rounded mb-3"
+          className="border p-2 w-full mb-2"
           placeholder="Name"
-          onChange={e => setForm({ ...form, name: e.target.value })}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
 
         <input
-          className="w-full border p-2 rounded mb-3"
+          className="border p-2 w-full mb-2"
           placeholder="Email"
-          onChange={e => setForm({ ...form, email: e.target.value })}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
 
         <textarea
-          className="w-full border p-2 rounded mb-4"
-          rows={4}
-          placeholder="Your feedback..."
-          onChange={e => setForm({ ...form, message: e.target.value })}
+          className="border p-2 w-full mb-2"
+          placeholder="Message"
+          onChange={(e) => setForm({ ...form, message: e.target.value })}
         />
 
-        <div className="flex justify-end space-x-2">
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose}>Cancel</button>
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded bg-gray-200"
-          >
-            Cancel
-          </button>
-          <button
+            className="bg-indigo-600 text-white px-3 py-1"
             onClick={submit}
-            className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
           >
-            Submit
+            Create
           </button>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default FeedbackModal;

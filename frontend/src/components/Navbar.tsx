@@ -1,49 +1,43 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link,useNavigate } from "react-router-dom";
 
-export default function Navbar() {
-  const navigate = useNavigate();
-  const role = localStorage.getItem("role");
-  const token = localStorage.getItem("token");
+export default function Navbar(){
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/login");
-  };
+const role = localStorage.getItem("role");
 
-  // Determine correct home path
-     const homePath = role === "admin" ? "/dashboard" : "/dashboard";
+const navigate = useNavigate();
 
-  return (
-    <nav className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center shadow-md">
-      <h1
-        onClick={() => navigate(homePath)}
-        className="text-xl font-semibold cursor-pointer"
-      >
-        Feedback Intelligence
-      </h1>
+const logout = ()=>{
 
-      {token && (
-        <div className="space-x-6 flex items-center">
+localStorage.clear();
 
-          <Link to={homePath} className="hover:underline">
-            Home
-          </Link>
+navigate("/login");
 
-          {role === "admin" && (
-            <Link to="/admin" className="hover:underline">
-              Admin Dashboard
-            </Link>
-          )}
+};
 
-          <button
-            onClick={logout}
-            className="bg-white text-indigo-600 px-3 py-1 rounded-md hover:bg-gray-100 transition"
-          >
-            Logout
-          </button>
+return(
 
-        </div>
-      )}
-    </nav>
-  );
+<nav className="bg-indigo-600 text-white px-6 py-4 flex justify-between">
+
+<h1 className="font-bold text-xl">
+Feedback Intelligence
+</h1>
+
+<div className="space-x-6">
+
+<Link to="/">Dashboard</Link>
+
+{role==="admin" && (
+<Link to="/admin">Admin</Link>
+)}
+
+<button onClick={logout}>
+Logout
+</button>
+
+</div>
+
+</nav>
+
+);
+
 }

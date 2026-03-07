@@ -1,25 +1,41 @@
-// import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { fallbackAnalyzer } from "../utils/fallbackAnalyzer";
 
-// const model = new ChatGoogleGenerativeAI({
-//   model: "gemini-1.5-flash",
-//   apiKey: process.env.GEMINI_API_KEY!,
-//   temperature: 0
-// });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
-// export const analyzeFeedback = async (message: string) => {
-//   const prompt = `
-// Return STRICT JSON:
-// {
-//   "category": "...",
-//   "priority": "low|medium|high",
-//   "sentiment": "positive|neutral|negative",
-//   "team": "..."
-// }
+export const analyzeFeedback = async (message:string)=>{
 
-// Feedback: ${message}
-// `;
+try{
 
-//   const response = await model.invoke(prompt);
+const model = genAI.getGenerativeModel({model:"gemini-pro"});
 
-//   return JSON.parse(response.content as string);
-// };
+const prompt = `
+Analyze the following feedback.
+
+Return JSON ONLY:
+
+{
+"category":"",
+"priority":"",
+"sentiment":""
+}
+
+Feedback:
+${message}
+`;
+
+const result = await model.generateContent(prompt);
+
+const text = result.response.text();
+
+return JSON.parse(text);
+
+}catch(error){
+
+console.log("LLM failed. Using fallback");
+
+return fallbackAnalyzer(message);
+
+}
+
+};

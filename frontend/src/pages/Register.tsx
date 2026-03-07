@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/api";
+import { useNavigate } from "react-router-dom";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -11,101 +11,42 @@ export default function Register() {
     password: "",
   });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const submit = async () => {
+    await api.post("/auth/register", form);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    try {
-      setLoading(true);
-
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/register",
-        form
-      );
-
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("role", res.data.role);
-
-      navigate("/dashboard");
-    } catch (err: unknown) {
-      const errorMessage = axios.isAxiosError(err) && err.response?.data?.message
-        ? err.response.data.message
-        : "Registration failed";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Create Account
-        </h2>
-        <p className="text-gray-500 mb-6">
-          Join the Feedback Intelligence Platform
-        </p>
+    <div className="flex items-center justify-center h-screen">
+      <div className="bg-white p-6 shadow rounded w-80">
+        <h2 className="text-xl font-bold mb-4">Register</h2>
 
-        {error && (
-          <div className="bg-red-100 text-red-600 p-3 rounded-md mb-4 text-sm">
-            {error}
-          </div>
-        )}
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Name"
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="name"
-            placeholder="Full Name"
-            required
-            value={form.name}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Email"
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
 
-          <input
-            type="email"
-            name="email"
-            placeholder="Email Address"
-            required
-            value={form.email}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
+        <input
+          className="border p-2 w-full mb-2"
+          type="password"
+          placeholder="Password"
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
 
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            required
-            value={form.password}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-50"
-          >
-            {loading ? "Creating account..." : "Register"}
-          </button>
-        </form>
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          Already have an account?{" "}
-          <Link to="/login" className="text-indigo-600 hover:underline">
-            Sign in
-          </Link>
-        </p>
+        <button
+          className="bg-indigo-600 text-white w-full py-2"
+          onClick={submit}
+        >
+          Register
+        </button>
       </div>
     </div>
   );
