@@ -40,7 +40,10 @@ const {page=1,limit=10,search="",category,priority} = req.query;
 const query:any = {};
 
 if(search){
-query.name = {$regex:search,$options:"i"};
+query.$or = [
+{ name: { $regex: search, $options:"i"} },
+{ message: { $regex: search, $options:"i"} }
+];
 }
 
 if(category){
@@ -57,5 +60,21 @@ const data = await Feedback.find(query)
 .limit(Number(limit));
 
 res.json(data);
+
+};
+
+export const deleteFeedback = async(req:any,res:any)=>{
+
+try{
+
+await Feedback.findByIdAndDelete(req.params.id);
+
+res.json({message:"Deleted"});
+
+}catch{
+
+res.status(500).json({message:"Delete failed"});
+
+}
 
 };

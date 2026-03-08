@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../api/api";
 import { useNavigate, Link } from "react-router-dom";
+import toast from "react-hot-toast"; // ✅ Import toast
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -9,13 +10,21 @@ export default function Login() {
   const navigate = useNavigate();
 
   const submit = async () => {
+  try {
     const res = await api.post("/auth/login", { email, password });
+
+    toast.success("Login successful!");
 
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("role", res.data.role);
+    localStorage.setItem("username", res.data.name);
 
     navigate("/");
-  };
+  } catch (error) {
+    console.error(error); // ✅ now it's used
+    toast.error("Invalid email or password");
+  }
+};
 
   return (
     <div className="flex items-center justify-center h-screen">

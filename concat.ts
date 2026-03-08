@@ -2,7 +2,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-
 const rootDirs = ["backend/src", "frontend/src"]; // adjust to your project
 const outputFile = "project-concatenated.ts";
 

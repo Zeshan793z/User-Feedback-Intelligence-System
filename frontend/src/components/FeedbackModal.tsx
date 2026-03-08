@@ -1,14 +1,16 @@
 import { useState } from "react";
 import api from "../api/api";
 import toast from "react-hot-toast";
-import type { FC } from "react";
 
 interface FeedbackModalProps {
-  onClose: () => void;       // a function that closes the modal
-  onCreated: () => void;     // a function that runs after feedback is created
+  onClose: () => void;
+  onCreated: () => void;
 }
 
-const FeedbackModal: FC<FeedbackModalProps> = ({ onClose, onCreated }) => {
+export default function FeedbackModal({
+  onClose,
+  onCreated,
+}: FeedbackModalProps) {
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -18,7 +20,7 @@ const FeedbackModal: FC<FeedbackModalProps> = ({ onClose, onCreated }) => {
   const submit = async () => {
     try {
       await api.post("/feedback", form);
-      toast.success("Feedback created");
+      toast.success("Feedback created successfully");
       onCreated();
       onClose();
     } catch {
@@ -34,18 +36,21 @@ const FeedbackModal: FC<FeedbackModalProps> = ({ onClose, onCreated }) => {
         <input
           className="border p-2 w-full mb-2"
           placeholder="Name"
+          value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
 
         <input
           className="border p-2 w-full mb-2"
           placeholder="Email"
+          value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
 
         <textarea
           className="border p-2 w-full mb-2"
           placeholder="Message"
+          value={form.message}
           onChange={(e) => setForm({ ...form, message: e.target.value })}
         />
 
@@ -61,6 +66,4 @@ const FeedbackModal: FC<FeedbackModalProps> = ({ onClose, onCreated }) => {
       </div>
     </div>
   );
-};
-
-export default FeedbackModal;
+}

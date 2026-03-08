@@ -1,39 +1,72 @@
+import SentimentBadge from "./SentimentBadge";
+import api from "../api/api";
+import toast from "react-hot-toast";
 import type { Feedback } from "../types/Feedback";
 
-export default function FeedbackTable({data}:{data:Feedback[]}){
+interface FeedbackTableProps {
+  data: Feedback[];
+  reload: () => void;
+}
 
-return(
+export default function FeedbackTable({ data, reload }: FeedbackTableProps) {
+  const role = localStorage.getItem("role");
 
-<table className="w-full bg-white shadow rounded">
+  const deleteFeedback = async (id: string) => {
+    try {
+      await api.delete(`/feedback/${id}`);
+      toast.success("Feedback deleted");
+      reload();
+    } catch {
+      toast.error("Failed to delete feedback");
+    }
+  };
 
-<thead className="bg-gray-200">
+  return (
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <table className="w-full text-sm text-center">
+        <thead className="bg-gray-100 text-gray-700">
+          <tr>
+            <th className="p-3">User</th>
+            <th className="p-3">Feedback</th>
+            <th className="p-3">Category</th>
+            <th className="p-3">Priority</th>
+            <th className="p-3">Sentiment</th>
+            <th className="p-3">Date</th>
+            {role === "admin" && <th className="p-3">Action</th>}
+          </tr>
+        </thead>
 
-<tr>
-<th>Name</th>
-<th>Category</th>
-<th>Priority</th>
-<th>Sentiment</th>
-</tr>
+        <tbody>
+          {data.map((f) => (
+            <tr key={f._id} className="border-t">
+              <td className="p-2">{f.name}</td>
+              <td>{f.message}</td>
+              <td>{f.category}</td>
+              <td>{f.priority}</td>
+              <td>
+                <SentimentBadge
+                  sentiment={f.sentiment as "positive" | "neutral" | "negative"}
+                />
+              </td>
 
-</thead>
+              <td className="p-3">
+                {new Date(f.createdAt).toLocaleDateString()}
+              </td>
 
-<tbody>
-
-{data.map(f=>(
-<tr key={f._id} className="border-t">
-
-<td>{f.name}</td>
-<td>{f.category}</td>
-<td>{f.priority}</td>
-<td>{f.sentiment}</td>
-
-</tr>
-))}
-
-</tbody>
-
-</table>
-
-);
-
+              {role === "admin" && (
+                <td className="p-3">
+                  <button
+                    className="text-red-500 hover:text-red-700 font-semibold"
+                    onClick={() => deleteFeedback(f._id)}
+                  >
+                    Delete
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }

@@ -39,6 +39,9 @@ const token = jwt.sign(
 process.env.JWT_SECRET as string
 );
 
-res.json({token,role:user.role});
-
+res.json({
+token,
+role:user.role,
+name:user.name
+});
 };

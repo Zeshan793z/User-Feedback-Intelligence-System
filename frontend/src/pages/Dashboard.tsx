@@ -1,54 +1,74 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import api from "../api/api";
 import Navbar from "../components/Navbar";
-import FeedbackModal from "../components/FeedbackModal";
 import FeedbackTable from "../components/FeedbackTable";
+import FiltersBar from "../components/FiltersBar";
+import LoadingSpinner from "../components/LoadingSpinner"; // ✅ Added
+import toast from "react-hot-toast"; // ✅ Added
 
 export default function Dashboard() {
   const [data, setData] = useState([]);
-  const [modal, setModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState("");
+  const [loading, setLoading] = useState(false); // ✅ Added
 
-const load = useCallback(async () => {
-  const res = await api.get("/feedback", { params: { search } });
-  setData(res.data);
-}, [search]);
+  // Load function with spinner + toast
+  const load = async () => {
+    try {
+      setLoading(true);
 
-useEffect(() => {
-  const fetchData = async () => {
-    await load();
+      const res = await api.get("/feedback", {
+        params: { search, category, priority },
+      });
+
+      setData(res.data);
+    } catch {
+      toast.error("Failed to fetch feedback"); // ✅ Error toast
+    } finally {
+      setLoading(false);
+    }
   };
-  fetchData();
-}, [load]);
+
+  // Fetch data whenever filters change
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res = await api.get("/feedback", {
+          params: { search, category, priority },
+        });
+        setData(res.data);
+      } catch {
+        toast.error("Failed to fetch feedback");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [search, category, priority]);
 
   return (
     <div>
       <Navbar />
+
       <div className="p-6">
-        <div className="flex justify-between mb-4">
-          <input
-            className="border p-2"
-            placeholder="Search name"
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <button
-            className="bg-indigo-600 text-white px-4 py-2"
-            onClick={() => setModal(true)}
-          >
-            Create Feedback
-          </button>
-        </div>
+        <FiltersBar
+          search={search}
+          setSearch={setSearch}
+          category={category}
+          setCategory={setCategory}
+          priority={priority}
+          setPriority={setPriority}
+        />
 
-        <button className="mb-4 text-blue-600" onClick={load}>
-          Search
-        </button>
-
-        <FeedbackTable data={data} />
+        {/* ✅ Show spinner while loading, otherwise show table */}
+        {loading ? (
+          <LoadingSpinner />
+        ) : (
+          <FeedbackTable data={data} reload={load} />
+        )}
       </div>
-
-      {modal && (
-        <FeedbackModal onClose={() => setModal(false)} onCreated={load} />
-      )}
     </div>
   );
 }

@@ -1,25 +1,54 @@
+// FILE: backend\src\app.ts
+import express from "express";
+import cors from "cors";
+
+import authRoutes from "./routes/authRoutes";
+import feedbackRoutes from "./routes/feedbackRoutes";
+import analyticsRoutes from "./routes/analyticsRoutes";
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.use("/api/auth",authRoutes);
+app.use("/api/feedback",feedbackRoutes);
+app.use("/api/analytics",analyticsRoutes);
+
+export default app;
+
 // FILE: backend\src\config\db.ts
 import mongoose from "mongoose";
 
 export const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI as string);
-    console.log("MongoDB Connected");
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-  }
+
+try {
+
+await mongoose.connect(process.env.MONGO_URI as string);
+
+console.log("MongoDB connected");
+
+} catch (error) {
+
+console.error(error);
+
+process.exit(1);
+
+}
+
 };
 
 // FILE: backend\src\controllers\analyticsController.ts
 import Feedback from "../models/Feedback";
 
-export const getAnalytics = async (_req:any,res:any)=>{
-
-const total = await Feedback.countDocuments();
+export const getAnalytics = async(req:any,res:any)=>{
 
 const sentiment = await Feedback.aggregate([
 {$group:{_id:"$sentiment",count:{$sum:1}}}
+]);
+
+const category = await Feedback.aggregate([
+{$group:{_id:"$category",count:{$sum:1}}}
 ]);
 
 const priority = await Feedback.aggregate([
@@ -27,182 +56,273 @@ const priority = await Feedback.aggregate([
 ]);
 
 res.json({
-total,
 sentiment,
+category,
 priority
 });
 
 };
 
 // FILE: backend\src\controllers\authController.ts
+import User from "../models/User";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
 
-const generateToken = (id:string,role:string)=>{
-return jwt.sign({id,role},process.env.JWT_SECRET as string,{
-expiresIn:"7d"
-});
-};
+export const register = async(req:any,res:any)=>{
 
-export const register = async (req:any,res:any)=>{
+const {name,email,password} = req.body;
 
-const {name,email,password}=req.body;
-
-const exists = await User.findOne({email});
-
-if(exists){
-return res.status(400).json({message:"User exists"});
-}
-
-const hashed = await bcrypt.hash(password,10);
+const hash = await bcrypt.hash(password,10);
 
 const user = await User.create({
 name,
 email,
-password:hashed
+password:hash
 });
 
-res.json({
-token:generateToken(user._id.toString(),user.role)
-});
+res.json(user);
 
 };
 
-export const login = async (req:any,res:any)=>{
+export const login = async(req:any,res:any)=>{
 
-const {email,password}=req.body;
+const {email,password} = req.body;
 
 const user = await User.findOne({email});
 
 if(!user){
-return res.status(400).json({message:"Invalid credentials"});
+return res.status(400).json({message:"User not found"});
 }
 
-const valid = await bcrypt.compare(password,user.password);
+const match = await bcrypt.compare(password,user.password);
 
-if(!valid){
-return res.status(400).json({message:"Invalid credentials"});
+if(!match){
+return res.status(400).json({message:"Invalid password"});
 }
 
-res.json({
-token:generateToken(user._id.toString(),user.role)
-});
+const token = jwt.sign(
+{id:user._id,role:user.role},
+process.env.JWT_SECRET as string
+);
+
+res.json({token,role:user.role});
 
 };
 
 // FILE: backend\src\controllers\feedbackController.ts
 import Feedback from "../models/Feedback";
 import { analyzeFeedback } from "../services/llmService";
+import { sendFeedbackEmail } from "../services/emailService";
 
-export const createFeedback = async (req:any,res:any)=>{
+export const createFeedback = async(req:any,res:any)=>{
 
 try{
 
-const {name,message}=req.body;
+const {name,email,message} = req.body;
 
 const ai = await analyzeFeedback(message);
 
 const feedback = await Feedback.create({
-  name,
-  message,
-  category: ai.category,
-  priority: ai.priority,
-  sentiment: ai.sentiment
+
+name,
+email,
+message,
+category:ai.category,
+priority:ai.priority,
+sentiment:ai.sentiment
+
 });
+
+await sendFeedbackEmail(feedback);
 
 res.status(201).json(feedback);
 
-}catch(err){
+}catch(error){
 
-console.error(err);
-
-res.status(500).json({
-message:"Feedback creation failed"
-});
+res.status(500).json({message:"Failed to create feedback"});
 
 }
 
 };
 
-export const getFeedbacks = async (req:any,res:any)=>{
+export const getFeedbacks = async(req:any,res:any)=>{
 
-const data = await Feedback
-.find()
-.sort({createdAt:-1});
+const {page=1,limit=10,search="",category,priority} = req.query;
+
+const query:any = {};
+
+if(search){
+query.name = {$regex:search,$options:"i"};
+}
+
+if(category){
+query.category = category;
+}
+
+if(priority){
+query.priority = priority;
+}
+
+const data = await Feedback.find(query)
+.sort({createdAt:-1})
+.skip((page-1)*limit)
+.limit(Number(limit));
 
 res.json(data);
 
+};
+
+export const deleteFeedback = async(req:any,res:any)=>{
+
+try{
+
+await Feedback.findByIdAndDelete(req.params.id);
+
+res.json({message:"Deleted"});
+
+}catch{
+
+res.status(500).json({message:"Delete failed"});
+
+}
+
+};
+
+// FILE: backend\src\controllers\teamController.ts
+import Team from "../models/Team";
+import { sendEmail } from "../services/emailService";
+
+export const setTeamEmail = async (req: any, res: any) => {
+  try {
+    const { category, email } = req.body;
+    
+    let team = await Team.findOne({ category });
+    
+    if (team) {
+      team.email = email;
+      await team.save();
+    } else {
+      team = await Team.create({ category, email });
+    }
+    
+    res.json({ message: "Team email updated", team });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to set team email" });
+  }
+};
+
+export const getTeamEmails = async (req: any, res: any) => {
+  try {
+    const teams = await Team.find();
+    res.json(teams);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch teams" });
+  }
 };
 
 // FILE: backend\src\middleware\authMiddleware.ts
 import jwt from "jsonwebtoken";
 
 export const protect = (req:any,res:any,next:any)=>{
-  const token = req.headers.authorization?.split(" ")[1];
 
-  if(!token){
-    return res.status(401).json({message:"Unauthorized"});
-  }
+const token = req.headers.authorization?.split(" ")[1];
 
-  try{
-    const decoded = jwt.verify(token,process.env.JWT_SECRET as string);
-    req.user = decoded;
-    next();
-  }catch{
-    res.status(401).json({message:"Invalid token"});
-  }
+if(!token){
+return res.status(401).json({message:"Unauthorized"});
+}
+
+const decoded:any = jwt.verify(
+token,
+process.env.JWT_SECRET as string
+);
+
+req.user = decoded;
+
+next();
+
 };
 
 // FILE: backend\src\models\Feedback.ts
 import mongoose from "mongoose";
 
-const feedbackSchema = new mongoose.Schema(
-{
-  name: String,
-  message: String,
+const feedbackSchema = new mongoose.Schema({
 
-  category: String,
+name:String,
 
-  priority: {
-    type: String,
-    enum: ["low", "medium", "high"],
-    default: "low"
+email:String,
+
+message:String,
+
+category:String,
+
+priority:String,
+
+sentiment:String,
+
+createdAt:{
+type:Date,
+default:Date.now
+}
+
+});
+
+export default mongoose.model("Feedback",feedbackSchema);
+
+// FILE: backend\src\models\Team.ts
+import mongoose from "mongoose";
+
+const teamSchema = new mongoose.Schema(
+  {
+    category: {
+      type: String,
+      enum: ["billing", "support", "product", "general"],
+      required: true,
+      unique: true
+    },
+    email: {
+      type: String,
+      required: true
+    }
   },
-
-  sentiment: {
-    type: String,
-    enum: ["positive", "neutral", "negative"],
-    default: "neutral"
-  }
-},
-{ timestamps: true }
+  { timestamps: true }
 );
 
-export default mongoose.model("Feedback", feedbackSchema);
+export default mongoose.model("Team", teamSchema);
 
 // FILE: backend\src\models\User.ts
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema(
-{
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-  role: {
-    type: String,
-    enum: ["admin", "user"],
-    default: "user"
-  }
-},
-{ timestamps: true }
-);
+const userSchema = new mongoose.Schema({
 
-export default mongoose.model("User", userSchema);
+name:{
+type:String,
+required:true
+},
+
+email:{
+type:String,
+required:true,
+unique:true
+},
+
+password:{
+type:String,
+required:true
+},
+
+role:{
+type:String,
+enum:["user","admin"],
+default:"user"
+}
+
+});
+
+export default mongoose.model("User",userSchema);
 
 // FILE: backend\src\routes\analyticsRoutes.ts
 import express from "express";
-import { getAnalytics } from "../controllers/analyticsController";
+import {getAnalytics} from "../controllers/analyticsController";
 
 const router = express.Router();
 
@@ -212,10 +332,7 @@ export default router;
 
 // FILE: backend\src\routes\authRoutes.ts
 import express from "express";
-import {
-register,
-login
-} from "../controllers/authController";
+import {register,login} from "../controllers/authController";
 
 const router = express.Router();
 
@@ -227,101 +344,97 @@ export default router;
 // FILE: backend\src\routes\feedbackRoutes.ts
 import express from "express";
 import {
-createFeedback,
-getFeedbacks
+  createFeedback,
+  deleteFeedback,
+  getFeedbacks,
 } from "../controllers/feedbackController";
-
-const router = express.Router();
-
-router.post("/",createFeedback);
-router.get("/",getFeedbacks);
-
-export default router;
-
-// FILE: backend\src\routes\teamRoutes.ts
-import express from "express";
-import { setTeamEmail } from "../controllers/teamController";
 import { protect } from "../middleware/authMiddleware";
-import { adminOnly } from "../middleware/roleMiddleware";
 
 const router = express.Router();
 
-router.post("/", protect, adminOnly, setTeamEmail);
-
+router.post("/", protect, createFeedback);
+router.get("/", protect, getFeedbacks);
+router.delete("/:id", protect, deleteFeedback);
 export default router;
+
 
 // FILE: backend\src\server.ts
-import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
-
-import { connectDB } from "./config/db";
-
-import authRoutes from "./routes/authRoutes";
-import feedbackRoutes from "./routes/feedbackRoutes";
-import analyticsRoutes from "./routes/analyticsRoutes";
-
 dotenv.config();
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
+import app from "./app";
+import { connectDB } from "./config/db";
 
 connectDB();
 
-app.use("/api/auth",authRoutes);
-app.use("/api/feedbacks",feedbackRoutes);
-app.use("/api/analytics",analyticsRoutes);
-
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT,()=>{
-console.log(`Server running on ${PORT}`);
+
+console.log(`Server running on port ${PORT}`);
+
 });
 
 // FILE: backend\src\services\emailService.ts
 import nodemailer from "nodemailer";
 
-export const sendEmail = async (
-to:string,
-subject:string,
-text:string
-)=>{
+export const sendFeedbackEmail = async (feedback:any)=>{
+
 const transporter = nodemailer.createTransport({
+
 service:"gmail",
+
 auth:{
-  user:process.env.EMAIL_USER,
-  pass:process.env.EMAIL_PASS
+user:process.env.EMAIL_USER,
+pass:process.env.EMAIL_PASS
 }
+
 });
 
 await transporter.sendMail({
+
 from:process.env.EMAIL_USER,
-to,
-subject,
-text
+
+to:process.env.TEAM_EMAIL,
+
+subject:"New Feedback Received",
+
+text:`
+Name: ${feedback.name}
+
+Message:
+${feedback.message}
+
+Category: ${feedback.category}
+Priority: ${feedback.priority}
+Sentiment: ${feedback.sentiment}
+`
+
 });
+
 };
 
 // FILE: backend\src\services\llmService.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { fallbackAnalyzer } from "../utils/fallbackAnalyzer";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
 export const analyzeFeedback = async (message:string)=>{
 
-const model = genAI.getGenerativeModel({
-  model:"gemini-1.5-flash"
-});
+try{
+
+const model = genAI.getGenerativeModel({model:"gemini-pro"});
 
 const prompt = `
-Analyze this customer feedback and return JSON only.
+Analyze the following feedback.
+
+Return JSON ONLY:
 
 {
- "category": "billing | support | product | general",
- "priority": "low | medium | high",
- "sentiment": "positive | neutral | negative"
+"category":"",
+"priority":"",
+"sentiment":""
 }
 
 Feedback:
@@ -329,9 +442,51 @@ ${message}
 `;
 
 const result = await model.generateContent(prompt);
+
 const text = result.response.text();
 
 return JSON.parse(text);
+
+}catch(error){
+
+console.log("LLM failed. Using fallback");
+
+return fallbackAnalyzer(message);
+
+}
+
+};
+
+// FILE: backend\src\utils\fallbackAnalyzer.ts
+export const fallbackAnalyzer = (message:string)=>{
+
+const msg = message.toLowerCase();
+
+let sentiment="neutral";
+let priority="medium";
+let category="general";
+
+if(msg.includes("bug") || msg.includes("error")){
+category="bug";
+priority="high";
+sentiment="negative";
+}
+
+if(msg.includes("feature")){
+category="feature";
+priority="low";
+}
+
+if(msg.includes("great") || msg.includes("good")){
+sentiment="positive";
+}
+
+return{
+category,
+priority,
+sentiment
+};
+
 };
 
 // FILE: backend\src\utils\sendEmail.ts
@@ -358,47 +513,60 @@ export const sendEmail = async (
   });
 };
 
+// FILE: frontend\src\api\api.ts
+import axios from "axios";
+
+const api = axios.create({
+baseURL:"http://localhost:5000/api"
+});
+
+api.interceptors.request.use((config)=>{
+
+const token = localStorage.getItem("token");
+
+if(token){
+config.headers.Authorization=`Bearer ${token}`;
+}
+
+return config;
+});
+
+export default api;
+
 // FILE: frontend\src\App.tsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import Landing from "./pages/Landing";
+
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* Public Landing */}
-        <Route path="/" element={<Landing />} />
-
-        {/* Public Auth */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Protected User Dashboard */}
         <Route
-          path="/dashboard"
+          path="/"
           element={
             <ProtectedRoute>
-              <Home />
+              <Dashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* Admin-only */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute requiredRole="admin">
+            <ProtectedRoute>
               <AdminDashboard />
             </ProtectedRoute>
           }
         />
-
       </Routes>
     </BrowserRouter>
   );
@@ -406,408 +574,179 @@ function App() {
 
 export default App;
 
-// FILE: frontend\src\components\Card.tsx
-import type { ReactNode } from 'react';
 
-interface CardProps {
-  children: ReactNode;
-}
+// FILE: frontend\src\components\AdminStats.tsx
+import type { Feedback } from "../types/Feedback";
 
-export default function Card({ children }: CardProps) {
+export default function AdminStats({ data }: { data: Feedback[] }) {
+  const total = data.length;
+  const urgent = data.filter((f) => f.priority === "high").length;
+  const negative = data.filter((f) => f.sentiment === "negative").length;
+
+  const cardStyle = "bg-white shadow-md rounded-xl p-6 flex flex-col gap-2";
+
   return (
-    <div className="bg-white shadow-md rounded-xl p-4 border border-gray-200 hover:shadow-lg transition">
-      {children}
+    <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className={cardStyle}>
+        <p className="text-sm text-gray-500">Total Feedback</p>
+        <h2 className="text-3xl font-bold text-indigo-600">{total}</h2>
+      </div>
+
+      <div className={cardStyle}>
+        <p className="text-sm text-gray-500">Urgent / High Priority</p>
+        <h2 className="text-3xl font-bold text-orange-500">{urgent}</h2>
+      </div>
+
+      <div className={cardStyle}>
+        <p className="text-sm text-gray-500">Negative Sentiment</p>
+        <h2 className="text-3xl font-bold text-red-500">{negative}</h2>
+      </div>
     </div>
   );
 }
 
-// FILE: frontend\src\components\CreateFeedbackModal.tsx
+// FILE: frontend\src\components\FeedbackModal.tsx
 import { useState } from "react";
-import axios from "axios";
+import api from "../api/api";
+import toast from "react-hot-toast";
 
-interface Props {
-  isOpen: boolean;
+interface FeedbackModalProps {
   onClose: () => void;
-  onSuccess: () => void;
+  onCreated: () => void;
 }
 
-export default function CreateFeedbackModal({
-  isOpen,
-  onClose,
-  onSuccess,
-}: Props) {
+export default function FeedbackModal({ onClose, onCreated }: FeedbackModalProps) {
   const [form, setForm] = useState({
     name: "",
     email: "",
     message: "",
-    category: "",
-    priority: "",
-    sentiment: "",
-    team: "",
   });
 
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    await axios.post(
-      "http://localhost:5000/api/feedbacks",
-      form,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-
-    onSuccess();
-    onClose();
+  const submit = async () => {
+    try {
+      await api.post("/feedback", form);
+      toast.success("Feedback created");
+      onCreated();
+      onClose();
+    } catch {
+      toast.error("Error creating feedback");
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-lg rounded-xl shadow-xl p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+      <div className="bg-white p-6 rounded-lg w-96">
+        <h2 className="text-lg font-bold mb-4">Create Feedback</h2>
 
-        <h2 className="text-xl font-semibold mb-4">
-          Create Feedback
-        </h2>
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
 
-          <input
-            type="text"
-            placeholder="Name"
-            required
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
+        <textarea
+          className="border p-2 w-full mb-2"
+          placeholder="Message"
+          value={form.message}
+          onChange={(e) => setForm({ ...form, message: e.target.value })}
+        />
 
-          <input
-            type="email"
-            placeholder="Email"
-            required
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
-
-          <textarea
-            placeholder="Feedback message"
-            required
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, message: e.target.value })}
-          />
-
-          <input
-            type="text"
-            placeholder="Category"
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-          />
-
-          <input
-            type="text"
-            placeholder="Priority"
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, priority: e.target.value })}
-          />
-
-          <input
-            type="text"
-            placeholder="Sentiment"
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, sentiment: e.target.value })}
-          />
-
-          <input
-            type="text"
-            placeholder="Team"
-            className="w-full border px-3 py-2 rounded"
-            onChange={(e) => setForm({ ...form, team: e.target.value })}
-          />
-
-          <div className="flex justify-end space-x-3 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white rounded"
-            >
-              Submit
-            </button>
-          </div>
-
-        </form>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose}>Cancel</button>
+          <button
+            className="bg-indigo-600 text-white px-3 py-1"
+            onClick={submit}
+          >
+            Create
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-
-// FILE: frontend\src\components\FeedbackForm.tsx
-import { useState } from "react";
-import API from "../utils/api";
-
-const FeedbackForm = ({reload}:{reload:()=>void}) => {
-
-const [name,setName] = useState("");
-const [message,setMessage] = useState("");
-
-const submit = async (e:unknown) => {
-
-e.preventDefault();
-
-await API.post("/feedbacks",{
-  name,
-  message
-});
-
-setName("");
-setMessage("");
-
-reload();
-
-};
-
-return(
-
-<form
-onSubmit={submit}
-className="bg-white p-4 rounded shadow"
->
-
-<h2 className="font-semibold mb-3">
-Submit Feedback
-</h2>
-
-<input
-placeholder="Name"
-className="border p-2 w-full mb-2"
-value={name}
-onChange={(e)=>setName(e.target.value)}
-/>
-
-<textarea
-placeholder="Feedback message"
-className="border p-2 w-full mb-2"
-value={message}
-onChange={(e)=>setMessage(e.target.value)}
-/>
-
-<button
-className="bg-blue-500 text-white px-4 py-2 rounded"
->
-Submit
-</button>
-
-</form>
-
-);
-
-};
-
-export default FeedbackForm;
 
 // FILE: frontend\src\components\FeedbackTable.tsx
-interface Props {
-  feedbacks: unknown[];
-}
+import type { Feedback } from "../types/Feedback";
 
-export default function FeedbackTable({ feedbacks }: Props) {
+export default function FeedbackTable({ data }: { data: Feedback[] }) {
   return (
-    <div className="bg-white rounded-xl shadow overflow-hidden">
-      <table className="w-full text-left">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-3">Name</th>
-            <th className="p-3">Category</th>
-            <th className="p-3">Priority</th>
-            <th className="p-3">Sentiment</th>
+    <table className="w-full bg-white shadow rounded">
+      <thead className="bg-gray-200">
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Priority</th>
+          <th>Sentiment</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {data.map((f) => (
+          <tr key={f._id} className="border-t">
+            <td>{f.name}</td>
+            <td>{f.category}</td>
+            <td>{f.priority}</td>
+            <td>{f.sentiment}</td>
           </tr>
-        </thead>
-        <tbody>
-          {feedbacks.map((f) => (
-            <tr key={f._id} className="border-t">
-              <td className="p-3">{f.name}</td>
-              <td className="p-3">{f.category}</td>
-              <td className="p-3">{f.priority}</td>
-              <td className="p-3">{f.sentiment}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
-// FILE: frontend\src\components\Navbar.tsx
-import { Link, useNavigate } from "react-router-dom";
 
-export default function Navbar() {
-  const navigate = useNavigate();
-  const role = localStorage.getItem("role");
-  const token = localStorage.getItem("token");
+// FILE: frontend\src\components\FiltersBar.tsx
+interface FiltersBarProps {
+  search: string;
+  setSearch: (value: string) => void;
+  category: string;
+  setCategory: (value: string) => void;
+  priority: string;
+  setPriority: (value: string) => void;
+}
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/login");
-  };
-
-  // Determine correct home path
-     const homePath = role === "admin" ? "/dashboard" : "/dashboard";
-
+export default function FiltersBar({
+  search,
+  setSearch,
+  category,
+  setCategory,
+  priority,
+  setPriority,
+}: FiltersBarProps) {
   return (
-    <nav className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center shadow-md">
-      <h1
-        onClick={() => navigate(homePath)}
-        className="text-xl font-semibold cursor-pointer"
-      >
-        Feedback Intelligence
-      </h1>
-
-      {token && (
-        <div className="space-x-6 flex items-center">
-
-          <Link to={homePath} className="hover:underline">
-            Home
-          </Link>
-
-          {role === "admin" && (
-            <Link to="/admin" className="hover:underline">
-              Admin Dashboard
-            </Link>
-          )}
-
-          <button
-            onClick={logout}
-            className="bg-white text-indigo-600 px-3 py-1 rounded-md hover:bg-gray-100 transition"
-          >
-            Logout
-          </button>
-
-        </div>
-      )}
-    </nav>
-  );
-}
-
-// FILE: frontend\src\components\Pagination.tsx
-interface Props {
-  page: number;
-  totalPages: number;
-  setPage: any;
-}
-
-export default function Pagination({ page, totalPages, setPage }: Props) {
-  return (
-    <div className="flex justify-center mt-6 space-x-4">
-      <button
-        disabled={page === 1}
-        onClick={() => setPage(page - 1)}
-        className="px-4 py-2 border rounded disabled:opacity-50"
-      >
-        Previous
-      </button>
-
-      <span className="px-4 py-2">
-        Page {page} of {totalPages}
-      </span>
-
-      <button
-        disabled={page === totalPages}
-        onClick={() => setPage(page + 1)}
-        className="px-4 py-2 border rounded disabled:opacity-50"
-      >
-        Next
-      </button>
-    </div>
-  );
-}
-
-// FILE: frontend\src\components\ProtectedRoute.tsx
-import { Navigate } from "react-router-dom";
-import type { ReactNode } from "react";
-
-interface ProtectedRouteProps {
-  children: ReactNode;
-  requiredRole?: "admin" | "user";
-}
-
-export default function ProtectedRoute({
-  children,
-  requiredRole
-}: ProtectedRouteProps) {
-  const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role");
-
-  // 🔐 Not logged in
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // 🛡 Role-based protection (if specified)
-  if (requiredRole && role !== requiredRole) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="bg-white shadow-md rounded-xl p-8 text-center">
-          <h2 className="text-xl font-semibold text-red-600 mb-2">
-            Access Denied
-          </h2>
-          <p className="text-gray-600">
-            You do not have permission to view this page.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-// FILE: frontend\src\components\SearchFilters.tsx
-interface Props {
-  filters: any;
-  setFilters: any;
-}
-
-export default function SearchFilters({ filters, setFilters }: Props) {
-  return (
-    <div className="bg-white p-4 rounded-xl shadow flex flex-wrap gap-4">
+    <div className="bg-white p-4 rounded shadow flex gap-4 mb-6">
       <input
-        type="text"
-        placeholder="Search by name"
-        className="border px-3 py-2 rounded"
-        value={filters.name}
-        onChange={(e) =>
-          setFilters({ ...filters, name: e.target.value })
-        }
+        placeholder="Search feedback or user name..."
+        className="border p-2 flex-1 rounded"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
       />
 
       <select
-        className="border px-3 py-2 rounded"
-        value={filters.category}
-        onChange={(e) =>
-          setFilters({ ...filters, category: e.target.value })
-        }
+        className="border p-2 rounded"
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
       >
         <option value="">All Categories</option>
-        <option value="Billing">Billing</option>
-        <option value="Technical">Technical</option>
+        <option value="bug">Bug</option>
+        <option value="feature">Feature</option>
+        <option value="general">General</option>
       </select>
 
       <select
-        className="border px-3 py-2 rounded"
-        value={filters.priority}
-        onChange={(e) =>
-          setFilters({ ...filters, priority: e.target.value })
-        }
+        className="border p-2 rounded"
+        value={priority}
+        onChange={(e) => setPriority(e.target.value)}
       >
-        <option value="">All Priority</option>
+        <option value="">All Priorities</option>
         <option value="high">High</option>
         <option value="medium">Medium</option>
         <option value="low">Low</option>
@@ -816,47 +755,111 @@ export default function SearchFilters({ filters, setFilters }: Props) {
   );
 }
 
+// FILE: frontend\src\components\Navbar.tsx
+import { Link,useNavigate } from "react-router-dom";
+
+export default function Navbar(){
+
+const role = localStorage.getItem("role");
+
+const navigate = useNavigate();
+
+const logout = ()=>{
+
+localStorage.clear();
+
+navigate("/login");
+
+};
+
+return(
+
+<nav className="bg-indigo-600 text-white px-6 py-4 flex justify-between">
+
+<h1 className="font-bold text-xl">
+Feedback Intelligence
+</h1>
+
+<div className="space-x-6">
+
+<Link to="/">Dashboard</Link>
+
+{role==="admin" && (
+<Link to="/admin">Admin</Link>
+)}
+
+<button onClick={logout}>
+Logout
+</button>
+
+</div>
+
+</nav>
+
+);
+
+}
+
+// FILE: frontend\src\components\ProtectedRoute.tsx
+import { Navigate } from "react-router-dom";
+import type { ReactNode } from "react";
+
+export default function ProtectedRoute({ children }: { children: ReactNode }) {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
+}
+
 // FILE: frontend\src\main.tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Toaster } from "react-hot-toast";
+
 import App from "./App";
 import "./index.css";
 
+import { Toaster } from "react-hot-toast";
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <>
-      <App />
-      <Toaster position="top-right" />
-    </>
-  </React.StrictMode>
+    <App />
+
+    <Toaster />
+  </React.StrictMode>,
 );
+
 
 // FILE: frontend\src\pages\AdminDashboard.tsx
 import { useEffect, useState } from "react";
+import api from "../api/api";
 import Navbar from "../components/Navbar";
-import { api } from "../services/api";
-import {
-  PieChart,
-  Pie,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid
-} from "recharts";
+
+import { PieChart, Pie, Cell, Tooltip } from "recharts";
+
+interface ChartItem {
+  _id: string;
+  count: number;
+}
 
 interface AnalyticsData {
-  sentiment: Array<{ _id: string; count: number }>;
-  priority: Array<{ _id: string; count: number }>;
+  sentiment: ChartItem[];
+  priority: ChartItem[];
 }
+
+const COLORS = ["#4F46E5", "#F59E0B", "#EF4444", "#10B981"];
 
 export default function AdminDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
 
   useEffect(() => {
-    api.get("/analytics").then(res => setData(res.data));
+    const fetchData = async () => {
+      const res = await api.get("/analytics");
+      setData(res.data);
+    };
+    fetchData();
   }, []);
 
   if (!data) return <div>Loading...</div>;
@@ -865,28 +868,41 @@ export default function AdminDashboard() {
     <div className="bg-gray-100 min-h-screen">
       <Navbar />
 
-      <div className="max-w-6xl mx-auto p-6">
-        <h2 className="text-2xl font-semibold mb-6">Analytics Dashboard</h2>
+      <div className="p-6">
+        <h2 className="text-xl font-bold mb-6">Admin Analytics</h2>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h3 className="mb-4 font-semibold">Sentiment</h3>
-            <PieChart width={300} height={250}>
-              <Pie data={data.sentiment} dataKey="count" nameKey="_id" />
-              <Tooltip />
-            </PieChart>
-          </div>
+        <div className="flex gap-10">
+          {/* Sentiment Chart */}
+          <PieChart width={300} height={300}>
+            <Pie
+              data={data.sentiment}
+              dataKey="count"
+              nameKey="_id"
+              outerRadius={120}
+              label
+            >
+              {data.sentiment.map((entry, i) => (
+                <Cell key={`sentiment-${i}`} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
 
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h3 className="mb-4 font-semibold">Priority</h3>
-            <BarChart width={350} height={250} data={data.priority}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="_id" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" />
-            </BarChart>
-          </div>
+          {/* Priority Chart */}
+          <PieChart width={300} height={300}>
+            <Pie
+              data={data.priority}
+              dataKey="count"
+              nameKey="_id"
+              outerRadius={120}
+              label
+            >
+              {data.priority.map((entry, i) => (
+                <Cell key={`priority-${i}`} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
         </div>
       </div>
     </div>
@@ -894,244 +910,141 @@ export default function AdminDashboard() {
 }
 
 // FILE: frontend\src\pages\Dashboard.tsx
-import { useEffect, useState } from "react";
-import API from "../utils/api";
-import toast from "react-hot-toast";
-import Navbar from "../components/Navbar";
-import SearchFilters from "../components/SearchFilters";
-import FeedbackTable from "../components/FeedbackTable";
-import Pagination from "../components/Pagination";
-import CreateFeedbackModal from "../components/CreateFeedbackModal";
-
-export default function Dashboard() {
-  const [feedbacks, setFeedbacks] = useState([]);
-  const [filters, setFilters] = useState({
-    name: "",
-    category: "",
-    priority: "",
-  });
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [open, setOpen] = useState(false);
-
-  const fetchFeedbacks = async () => {
-    try {
-      const res = await API.get("/feedbacks", {
-        params: {
-          ...filters,
-          page,
-          limit: 5,
-        },
-      });
-
-      setFeedbacks(res.data.feedbacks);
-      setTotalPages(res.data.totalPages);
-    } catch {
-      toast.error("Failed to load feedbacks");
-    }
-  };
-
-  useEffect(() => {
-    fetchFeedbacks();
-  }, [filters, page]);
-
-  return (
-    <>
-      <Navbar />
-
-      <div className="p-6 space-y-6 bg-gray-100 min-h-screen">
-
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold">
-            Dashboard
-          </h1>
-
-          <button
-            onClick={() => setOpen(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded"
-          >
-            + Create Feedback
-          </button>
-        </div>
-
-        <SearchFilters filters={filters} setFilters={setFilters} />
-
-        <FeedbackTable feedbacks={feedbacks} />
-
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          setPage={setPage}
-        />
-
-        <CreateFeedbackModal
-          isOpen={open}
-          onClose={() => setOpen(false)}
-          onSuccess={() => {
-            fetchFeedbacks();
-            toast.success("Feedback created successfully");
-          }}
-        />
-      </div>
-    </>
-  );
-}
-
-// FILE: frontend\src\pages\Home.tsx
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
+import api from "../api/api";
 import Navbar from "../components/Navbar";
 import FeedbackModal from "../components/FeedbackModal";
-import Card from "../components/Card";
-import { api } from "../services/api";
+import FeedbackTable from "../components/FeedbackTable";
 
-interface Feedback {
-  _id: string;
-  name: string;
-  email: string;
-  message: string;
-  category: string;
-  priority: string;
-}
+export default function Dashboard(){
 
-export default function Home() {
-  const role = localStorage.getItem("role");
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-  const [show, setShow] = useState(false);
+const [data,setData]=useState([]);
+const [modal,setModal]=useState(false);
 
-  useEffect(() => {
-    if (role === "admin") {
-      api.get("/feedbacks").then(res => setFeedbacks(res.data));
-    }
-  }, [role]);
+const [search,setSearch]=useState("");
 
-  return (
-    <div className="bg-gray-100 min-h-screen">
-      <Navbar />
+const load = async ()=>{
 
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex justify-between mb-6">
-          <h2 className="text-2xl font-semibold">Feedback Overview</h2>
-          <button
-            onClick={() => setShow(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-          >
-            + New Feedback
-          </button>
-        </div>
+const res = await api.get("/feedback",{params:{search}});
 
-        {show && <FeedbackModal onClose={() => setShow(false)} />}
+setData(res.data);
 
-        {role === "admin" && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {feedbacks.map((f: Feedback) => (
-              <Card key={f._id}>
-                <h3 className="font-semibold">{f.name}</h3>
-                <p className="text-gray-600 text-sm mb-2">{f.email}</p>
-                <p className="mb-3">{f.message}</p>
+};
 
-                <div className="text-sm flex justify-between">
-                  <span className="bg-blue-100 px-2 py-1 rounded">
-                    {f.category}
-                  </span>
-                  <span className="bg-red-100 px-2 py-1 rounded">
-                    {f.priority}
-                  </span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+useEffect(()=>{
+(async ()=>{
+await load();
+})();
+},[search]);
 
-// FILE: frontend\src\pages\Landing.tsx
-import { Link } from "react-router-dom";
+return(
 
-export default function Landing() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-600 text-white px-6">
-      
-      <h1 className="text-4xl md:text-5xl font-bold mb-6 text-center">
-        Feedback Intelligence Platform
-      </h1>
+<div>
 
-      <p className="text-lg text-center max-w-xl mb-8 opacity-90">
-        Collect, analyze, and manage customer feedback with AI-powered insights.
-      </p>
+<Navbar/>
 
-      <div className="flex gap-4">
-        <Link
-          to="/login"
-          className="bg-white text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
-        >
-          Login
-        </Link>
+<div className="p-6">
 
-        <Link
-          to="/register"
-          className="border border-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-indigo-600 transition"
-        >
-          Register
-        </Link>
-      </div>
-    </div>
-  );
+<div className="flex justify-between mb-4">
+
+<input
+className="border p-2"
+placeholder="Search name"
+onChange={e=>setSearch(e.target.value)}
+/>
+
+<button
+className="bg-indigo-600 text-white px-4 py-2"
+onClick={()=>setModal(true)}
+>
+Create Feedback
+</button>
+
+</div>
+
+<button
+className="mb-4 text-blue-600"
+onClick={load}
+>
+Search
+</button>
+
+<FeedbackTable data={data}/>
+
+</div>
+
+{modal && (
+<FeedbackModal
+onClose={()=>setModal(false)}
+onCreated={load}
+/>
+)}
+
+</div>
+
+);
+
 }
 
 // FILE: frontend\src\pages\Login.tsx
 import { useState } from "react";
-import { api } from "../services/api";
-import { useNavigate } from "react-router-dom";
+import api from "../api/api";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "" });
 
   const submit = async () => {
-    const res = await api.post("/auth/login", form);
+    const res = await api.post("/auth/login", { email, password });
 
     localStorage.setItem("token", res.data.token);
-    const payload = JSON.parse(atob(res.data.token.split(".")[1]));
-    localStorage.setItem("role", payload.role);
+    localStorage.setItem("role", res.data.role);
+    localStorage.setItem("username",res.data.name);
 
-    navigate("/dashboard");
+    navigate("/");
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-xl shadow-md w-96">
-        <h2 className="text-xl font-semibold mb-6 text-center">Login</h2>
+    <div className="flex items-center justify-center h-screen">
+      <div className="bg-white p-6 shadow rounded w-80">
+        <h2 className="text-xl font-bold mb-4">Login</h2>
 
         <input
-          className="w-full border p-2 rounded mb-4"
+          className="border p-2 w-full mb-2"
           placeholder="Email"
-          onChange={e => setForm({ ...form, email: e.target.value })}
+          onChange={(e) => setEmail(e.target.value)}
         />
 
         <input
+          className="border p-2 w-full mb-2"
           type="password"
-          className="w-full border p-2 rounded mb-6"
           placeholder="Password"
-          onChange={e => setForm({ ...form, password: e.target.value })}
+          onChange={(e) => setPassword(e.target.value)}
         />
 
         <button
+          className="bg-indigo-600 text-white w-full py-2"
           onClick={submit}
-          className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700"
         >
           Login
         </button>
+
+        <p className="mt-3 text-sm">
+          No account? <Link to="/register">Register</Link>
+        </p>
       </div>
     </div>
   );
 }
 
+
 // FILE: frontend\src\pages\Register.tsx
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/api";
+import { useNavigate } from "react-router-dom";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -1142,105 +1055,47 @@ export default function Register() {
     password: "",
   });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const submit = async () => {
+    await api.post("/auth/register", form);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    try {
-      setLoading(true);
-
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/register",
-        form
-      );
-
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("role", res.data.role);
-
-      navigate("/dashboard");
-    } catch (err: unknown) {
-      const errorMessage = axios.isAxiosError(err) && err.response?.data?.message
-        ? err.response.data.message
-        : "Registration failed";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Create Account
-        </h2>
-        <p className="text-gray-500 mb-6">
-          Join the Feedback Intelligence Platform
-        </p>
+    <div className="flex items-center justify-center h-screen">
+      <div className="bg-white p-6 shadow rounded w-80">
+        <h2 className="text-xl font-bold mb-4">Register</h2>
 
-        {error && (
-          <div className="bg-red-100 text-red-600 p-3 rounded-md mb-4 text-sm">
-            {error}
-          </div>
-        )}
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Name"
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="name"
-            placeholder="Full Name"
-            required
-            value={form.name}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
+        <input
+          className="border p-2 w-full mb-2"
+          placeholder="Email"
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
 
-          <input
-            type="email"
-            name="email"
-            placeholder="Email Address"
-            required
-            value={form.email}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
+        <input
+          className="border p-2 w-full mb-2"
+          type="password"
+          placeholder="Password"
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
 
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            required
-            value={form.password}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-50"
-          >
-            {loading ? "Creating account..." : "Register"}
-          </button>
-        </form>
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          Already have an account?{" "}
-          <Link to="/login" className="text-indigo-600 hover:underline">
-            Sign in
-          </Link>
-        </p>
+        <button
+          className="bg-indigo-600 text-white w-full py-2"
+          onClick={submit}
+        >
+          Register
+        </button>
       </div>
     </div>
   );
 }
+
 
 // FILE: frontend\src\services\api.ts
 import axios from "axios";
@@ -1258,22 +1113,18 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-// FILE: frontend\src\utils\api.ts
-import axios from "axios";
+// FILE: frontend\src\types\Feedback.ts
+export interface Feedback {
 
-const API = axios.create({
-  baseURL: "http://localhost:5000/api"
-});
+_id:string
+name:string
+email:string
+message:string
 
-API.interceptors.request.use((req) => {
+category:string
+priority:string
+sentiment:string
 
-  const token = localStorage.getItem("token");
+createdAt:string
 
-  if(token){
-    req.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return req;
-});
-
-export default API;
+}
