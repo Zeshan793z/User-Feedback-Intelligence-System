@@ -113,7 +113,7 @@ export default function AdminDashboard() {
                   outerRadius={90}
                   label
                 >
-                  {analytics.sentiment.map((entry, i) => (
+                  {analytics.sentiment.map((_, i) => (
                     <Cell key={`sentiment-${i}`} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
                   outerRadius={90}
                   label
                 >
-                  {analytics.priority.map((entry, i) => (
+                  {analytics.priority.map((_, i) => (
                     <Cell key={`priority-${i}`} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
@@ -168,6 +168,10 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+
+
+//remove entry with _ 
 
 // import { useEffect, useState } from "react";
 // import api from "../api/api";
