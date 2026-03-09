@@ -11,6 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google/genai": "^1.44.0",
+    "@google/generative-ai": "^0.24.1",
     "@langchain/google-genai": "^2.1.22",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

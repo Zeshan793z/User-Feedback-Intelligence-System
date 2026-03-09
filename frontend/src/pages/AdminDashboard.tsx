@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/api";
 import Navbar from "../components/Navbar";
 import FeedbackTable from "../components/FeedbackTable";
+import FeedbackModal from "../components/FeedbackModal";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import toast from "react-hot-toast"; // ✅ Added
 import LoadingSpinner from "../components/LoadingSpinner"; // ✅ Added
@@ -22,6 +23,7 @@ const COLORS = ["#4F46E5", "#F59E0B", "#EF4444", "#10B981"];
 export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [modal, setModal] = useState(false);
   const [showAll, setShowAll] = useState(false); // toggle for "See More"
 
   const loadFeedback = async () => {
@@ -64,6 +66,16 @@ export default function AdminDashboard() {
       <Navbar />
 
       <div className="p-6">
+        {/* HEADER with only Create Button on the right */}
+        <div className="flex justify-end mb-6">
+          <button
+            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+            onClick={() => setModal(true)}
+          >
+            ✚ Create Feedback
+          </button>
+        </div>
+
         {/* ANALYTICS CARDS */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* Total Feedback */}
@@ -144,11 +156,18 @@ export default function AdminDashboard() {
             </button>
           </div>
         )}
+
+        {/* ✅ Render FeedbackModal when modal=true */}
+        {modal && (
+          <FeedbackModal
+            onClose={() => setModal(false)}
+            onCreated={loadFeedback}
+          />
+        )}
       </div>
     </div>
   );
 }
-
 
 // import { useEffect, useState } from "react";
 // import api from "../api/api";
