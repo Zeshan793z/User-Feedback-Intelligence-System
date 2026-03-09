@@ -58,16 +58,7 @@ export default function Dashboard() {
 
   }, [debouncedSearch, category, priority, load]);
 
-  // Auto refresh every 10 seconds
-  useEffect(() => {
 
-    const interval = setInterval(() => {
-      load();
-    }, 10000);
-
-    return () => clearInterval(interval);
-
-  }, [load]);
 
   return (
     <div>
