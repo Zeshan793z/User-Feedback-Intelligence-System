@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import api from "../api/api";
 import Navbar from "../components/Navbar";
 import FeedbackTable from "../components/FeedbackTable";
@@ -24,9 +24,8 @@ export default function Dashboard() {
   const debouncedSearch = useDebounce(search, 400);
 
   // Fetch feedback
-  const load = useCallback(async () => {
+  const load = async () => {
     try {
-
       setLoading(true);
 
       const res = await api.get("/feedback", {
@@ -45,10 +44,14 @@ export default function Dashboard() {
       setLoading(false);
       setSearchLoading(false);
     }
+  };
 
-  }, [debouncedSearch, category, priority]);
+  // Initial load
+  useEffect(() => {
+    load();
+  }, []);
 
-  // Load when filters change
+  // Reload when filters change
   useEffect(() => {
 
     if (search !== debouncedSearch) {
@@ -57,9 +60,7 @@ export default function Dashboard() {
 
     load();
 
-  }, [debouncedSearch, category, priority, load]);
-
-
+  }, [debouncedSearch, category, priority]);
 
   return (
     <div>
@@ -97,14 +98,12 @@ export default function Dashboard() {
           setPriority={setPriority}
         />
 
-        {/* Search loading */}
         {searchLoading && (
           <p className="text-sm text-gray-500 mb-3">
             Searching feedback...
           </p>
         )}
 
-        {/* Table */}
         {loading ? (
           <LoadingSpinner />
         ) : (
@@ -117,18 +116,21 @@ export default function Dashboard() {
 
       </div>
 
-      {/* Modal */}
-{modal && (
-  <FeedbackModal
-    onClose={() => setModal(false)}
-    onCreated={(newFeedback) => {
-      // ✅ Optimistic update: append new feedback to state
-      setData((prev) => [newFeedback, ...prev]);
-      setModal(false);
-      toast.success("Feedback created!");
-    }}
-  />
-)}
+      {modal && (
+        <FeedbackModal
+          onClose={() => setModal(false)}
+          onCreated={(newFeedback) => {
+
+            // ⭐ instant UI update
+            setData(prev => [newFeedback, ...prev]);
+
+            setModal(false);
+
+            toast.success("Feedback created!");
+
+          }}
+        />
+      )}
 
     </div>
   );
