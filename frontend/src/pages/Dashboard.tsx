@@ -7,10 +7,11 @@ import FeedbackModal from "../components/FeedbackModal";
 import LoadingSpinner from "../components/LoadingSpinner";
 import toast from "react-hot-toast";
 import useDebounce from "../hooks/useDebounce";
+import type { Feedback } from "../types/Feedback";
 
 export default function Dashboard() {
 
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<Feedback[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("");
@@ -117,20 +118,17 @@ export default function Dashboard() {
       </div>
 
       {/* Modal */}
-      {modal && (
-        <FeedbackModal
-          onClose={() => setModal(false)}
-          onCreated={() => {
-
-            setModal(false);
-
-            load(); // refresh instantly
-
-            toast.success("Feedback created!");
-
-          }}
-        />
-      )}
+{modal && (
+  <FeedbackModal
+    onClose={() => setModal(false)}
+    onCreated={(newFeedback) => {
+      // ✅ Optimistic update: append new feedback to state
+      setData((prev) => [newFeedback, ...prev]);
+      setModal(false);
+      toast.success("Feedback created!");
+    }}
+  />
+)}
 
     </div>
   );
