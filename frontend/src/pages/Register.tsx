@@ -15,13 +15,13 @@ export default function Register() {
     try {
       const res = await api.post("/auth/register", form);
 
-      // ✅ Save JWT token if backend returns it
       if (res.data.token) {
         localStorage.setItem("token", res.data.token);
+        navigate("/"); // Protected dashboard
+      } else {
+        // If backend doesn't return token, force user to login
+        navigate("/login");
       }
-
-      // ✅ Redirect straight to dashboard
-      navigate("/dashboard");
     } catch (err) {
       console.error(err);
       alert("Registration failed");
