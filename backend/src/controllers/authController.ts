@@ -20,7 +20,7 @@ export const register = async (req: any, res: any) => {
       name,
       email,
       password: hash,
-      role: "user", // default role
+      role: "user",
     });
 
     // generate JWT
@@ -30,15 +30,16 @@ export const register = async (req: any, res: any) => {
       { expiresIn: "7d" }
     );
 
-    // return token + user info
     res.json({
       token,
       role: user.role,
       name: user.name,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Registration failed" });
+  } catch (err: any) {
+    console.error("Registration error:", err);
+
+    // ✅ send back the actual error message for debugging
+    res.status(500).json({ message: "Registration failed", error: err.message });
   }
 };
 
@@ -67,9 +68,9 @@ export const login = async (req: any, res: any) => {
       role: user.role,
       name: user.name,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Login failed" });
+  } catch (err: any) {
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Login failed", error: err.message });
   }
 };
 
