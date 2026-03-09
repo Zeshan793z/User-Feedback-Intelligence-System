@@ -21,7 +21,7 @@ export default function Register() {
       }
 
       // ✅ Redirect straight to dashboard
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
       alert("Registration failed");
