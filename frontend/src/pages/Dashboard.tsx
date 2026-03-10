@@ -44,12 +44,22 @@ export default function Dashboard() {
     load();
   }, [debouncedSearch, category, priority]);
 
-  const handleCreated = (feedback: Feedback) => {
-    setData((prev) => [feedback, ...prev]);
-    setNewFeedbackId(feedback._id || null);
-    setTimeout(() => setNewFeedbackId(null), 2000);
+const handleCreated = async (feedback: Feedback) => {
+  if (!feedback?._id) {
+    await load(); // fallback if backend doesn't return full object
     setModal(false);
-  };
+    return;
+  }
+
+  setData((prev) => [feedback, ...prev]);
+  setNewFeedbackId(feedback._id);
+
+  setTimeout(() => {
+    setNewFeedbackId(null);
+  }, 2000);
+
+  setModal(false);
+};
 
   return (
     <div>
