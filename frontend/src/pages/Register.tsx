@@ -17,6 +17,9 @@ export default function Register() {
 
       if (res.data.token) {
         localStorage.setItem("token", res.data.token);
+                localStorage.setItem("role", res.data.role);
+        localStorage.setItem("username", res.data.name);
+
         navigate("/"); // Protected dashboard
       } else {
         // If backend doesn't return token, force user to login
