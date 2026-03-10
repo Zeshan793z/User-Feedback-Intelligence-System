@@ -26,6 +26,8 @@ export default function FeedbackModal({ onClose, onCreated }: FeedbackModalProps
       toast.success("Feedback submitted successfully");
 
       onCreated(res.data); // ✅ send new feedback
+
+      onClose(); //close modal after success update at 3.39 am
     } catch {
       toast.error("Error submitting feedback");
     } finally {

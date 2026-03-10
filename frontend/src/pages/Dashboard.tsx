@@ -44,21 +44,40 @@ export default function Dashboard() {
     load();
   }, [debouncedSearch, category, priority]);
 
-const handleCreated = async (feedback: Feedback) => {
-  if (!feedback?._id) {
-    await load(); // fallback if backend doesn't return full object
-    setModal(false);
-    return;
-  }
+// const handleCreated = async (feedback: Feedback) => {
+//   if (!feedback?._id) {
+//     await load(); // fallback if backend doesn't return full object
+//     setModal(false);
+//     return;
+//   }
 
-  setData((prev) => [feedback, ...prev]);
+//   setData((prev) => [feedback, ...prev]);
+//   setNewFeedbackId(feedback._id);
+
+//   setTimeout(() => {
+//     setNewFeedbackId(null);
+//   }, 2000);
+
+//   setModal(false);
+// };
+
+//Lower code was updated on 3.41 am
+
+const handleCreated = (feedback: Feedback) => {
+
+  setData(prev => [feedback, ...prev]);
+
   setNewFeedbackId(feedback._id);
 
   setTimeout(() => {
     setNewFeedbackId(null);
   }, 2000);
+};
 
-  setModal(false);
+//Lower code was updated on 3.47 am
+
+const handleDelete = (id: string) => {
+  setData(prev => prev.filter(f => f._id !== id));
 };
 
   return (
@@ -89,8 +108,8 @@ const handleCreated = async (feedback: Feedback) => {
         ) : (
           <FeedbackTable
             data={data}
-            reload={load}
             highlightId={newFeedbackId} // ✅ now typed
+            onDelete={handleDelete} // Updated on 3.47 am
           />
         )}
       </div>

@@ -114,7 +114,10 @@ export default function AdminDashboard() {
                   label
                 >
                   {analytics.sentiment.map((_, i) => (
-                    <Cell key={`sentiment-${i}`} fill={COLORS[i % COLORS.length]} />
+                    <Cell
+                      key={`sentiment-${i}`}
+                      fill={COLORS[i % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -133,7 +136,10 @@ export default function AdminDashboard() {
                   label
                 >
                   {analytics.priority.map((_, i) => (
-                    <Cell key={`priority-${i}`} fill={COLORS[i % COLORS.length]} />
+                    <Cell
+                      key={`priority-${i}`}
+                      fill={COLORS[i % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -143,8 +149,20 @@ export default function AdminDashboard() {
         </div>
 
         {/* FEEDBACK TABLE */}
-        <FeedbackTable data={displayedFeedbacks} reload={loadFeedback} />
-
+        {/* <FeedbackTable data={displayedFeedbacks} reload={loadFeedback} /> */}
+        {/* <FeedbackTable
+          data={displayedFeedbacks}
+          onDelete={(id) => {
+            setFeedbacks((prev) => prev.filter((f) => f._id !== id));
+          }}
+        /> */}
+        <FeedbackTable
+          data={displayedFeedbacks}
+          onDelete={(id) => {
+            setFeedbacks((prev) => prev.filter((f) => f._id !== id));
+            loadAnalytics();
+          }}
+        />
         {/* SEE MORE BUTTON */}
         {!showAll && feedbacks.length > 5 && (
           <div className="flex justify-center mt-4">
@@ -159,9 +177,16 @@ export default function AdminDashboard() {
 
         {/* ✅ Render FeedbackModal when modal=true */}
         {modal && (
+          // <FeedbackModal
+          //   onClose={() => setModal(false)}
+          //   onCreated={loadFeedback}
+          // />
           <FeedbackModal
             onClose={() => setModal(false)}
-            onCreated={loadFeedback}
+            onCreated={(newFeedback) => {
+              setFeedbacks((prev) => [newFeedback, ...prev]);
+              setModal(false);
+            }}
           />
         )}
       </div>
@@ -169,9 +194,7 @@ export default function AdminDashboard() {
   );
 }
 
-
-
-//remove entry with _ 
+//remove entry with _
 
 // import { useEffect, useState } from "react";
 // import api from "../api/api";
@@ -309,8 +332,6 @@ export default function AdminDashboard() {
 //     </div>
 //   );
 // }
-
-
 
 // import { useEffect, useState } from "react";
 // import api from "../api/api";

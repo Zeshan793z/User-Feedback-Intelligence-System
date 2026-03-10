@@ -3,28 +3,68 @@ import api from "../api/api";
 import toast from "react-hot-toast";
 import type { Feedback } from "../types/Feedback";
 
+// interface FeedbackTableProps {
+//   data: Feedback[];
+//   reload: () => Promise<void>;
+//   highlightId?: string | null;
+// }
+
+//Lower code was updated on 3.41 am
+
+// interface FeedbackTableProps {
+//   data: Feedback[];
+//   reload: () => Promise<void>;
+//   highlightId?: string | null;
+//   onDelete?: (id: string) => void;
+// }
+
+// Lower code was updated on 3.58 am
 interface FeedbackTableProps {
   data: Feedback[];
-  reload: () => Promise<void>;
   highlightId?: string | null;
+  onDelete?: (id: string) => void;
 }
+
+// export default function FeedbackTable({
+//   data,
+//   reload,
+//   highlightId,
+//   onDelete,
+// }: FeedbackTableProps) 
+
+// Lower code was updated on 3.58 am
 
 export default function FeedbackTable({
   data,
-  reload,
   highlightId,
-}: FeedbackTableProps) {
+  onDelete,
+}: FeedbackTableProps){
   const role = localStorage.getItem("role");
 
+  // const deleteFeedback = async (id: string) => {
+  //   try {
+  //     await api.delete(`/feedback/${id}`);
+  //     toast.success("Feedback deleted");
+  //     reload();
+  //   } catch {
+  //     toast.error("Failed to delete feedback");
+  //   }
+  // };
+
+  // Lower code was updated on 3.41 am
+
   const deleteFeedback = async (id: string) => {
-    try {
-      await api.delete(`/feedback/${id}`);
-      toast.success("Feedback deleted");
-      reload();
-    } catch {
-      toast.error("Failed to delete feedback");
-    }
-  };
+  try {
+    await api.delete(`/feedback/${id}`);
+
+    toast.success("Feedback deleted");
+
+    onDelete?.(id); // update dashboard state
+
+  } catch {
+    toast.error("Failed to delete feedback");
+  }
+};
 
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
