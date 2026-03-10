@@ -58,7 +58,6 @@ export default function Dashboard() {
       setSearchLoading(true);
     }
 
-    load();
 
   }, [debouncedSearch, category, priority]);
 
