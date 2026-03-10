@@ -1,48 +1,32 @@
 import { useState } from "react";
 import api from "../api/api";
 import toast from "react-hot-toast";
-import type { Feedback } from "../types/Feedback";
 
 interface FeedbackModalProps {
   onClose: () => void;
-  onCreated: (feedback: Feedback) => void; // use Feedback type
+  onCreated: () => void;
 }
 
-export default function FeedbackModal({ onClose, onCreated }: FeedbackModalProps) {
-  const [form, setForm] = useState({
-    name: "",
-    message: "",
-    email: "",
-  });
+export default function FeedbackModal({
+  onClose,
+  onCreated,
+}: FeedbackModalProps) {
+const [form, setForm] = useState({
+  name: "",
+  message: "",
+  email: "",
+});
 
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
-    if (!form.name || !form.message) {
-      toast.error("Name and feedback message are required");
-      return;
-    }
-
     try {
       setLoading(true);
-
-      // ✅ API call to create feedback
-      const res = await api.post("/feedback", form);
-
-      const createdFeedback = res.data;
-
-      toast.success("Feedback submitted!");
-
-      // ✅ send new feedback to dashboard for instant UI update
-      onCreated(createdFeedback);
-
-      // ✅ close modal
+      await api.post("/feedback", form);
+      toast.success("Feedback submitted successfully");
+      onCreated();
       onClose();
-
-      // reset form
-      setForm({ name: "", message: "", email: "" });
-    } catch (error) {
-      console.error("Error submitting feedback:", error);
+    } catch {
       toast.error("Error submitting feedback");
     } finally {
       setLoading(false);
@@ -51,53 +35,51 @@ export default function FeedbackModal({ onClose, onCreated }: FeedbackModalProps
 
   return (
     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white p-6 rounded-lg w-1/3 shadow-lg">
+      <div className="bg-white p-6 rounded-lg w-1/4 shadow-lg">
         <h2 className="text-lg font-bold mb-6">Submit Feedback</h2>
 
         {/* Name */}
-        <div className="mb-5">
+        <div className="mb-6">
           <label className="block text-sm font-medium mb-1">Your Name</label>
           <input
-            className="border border-gray-300 rounded-md p-2 w-full"
+            className="border border-gray-300 rounded-md p-2 w-full text-gray-600 placeholder-gray-400"
+            placeholder="Zeshan Ahmed"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </div>
 
         {/* Feedback */}
-        <div className="mb-5">
+        <div className="mb-6">
           <label className="block text-sm font-medium mb-1">Feedback</label>
           <textarea
-            className="border border-gray-300 rounded-md p-2 w-full"
-            rows={4}
+            className="border border-gray-300 rounded-md p-2 w-full text-gray-600 placeholder-gray-400"
+            placeholder="Describe your detail feedback here please..."
             value={form.message}
             onChange={(e) => setForm({ ...form, message: e.target.value })}
           />
         </div>
 
         {/* Email */}
-        <div className="mb-5">
+        <div className="mb-6">
           <label className="block text-sm font-medium mb-1">Email</label>
           <input
-            className="border border-gray-300 rounded-md p-2 w-full"
+            className="border p-2 w-full mb-3 text-gray-600"
+            placeholder="you@example.com"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </div>
 
         {/* Buttons */}
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 hover:bg-gray-100 rounded"
-          >
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2  hover:bg-gray-100">
             Cancel
           </button>
-
           <button
+            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
             onClick={submit}
             disabled={loading}
-            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
           >
             {loading ? "Submitting..." : "🚀 Submit"}
           </button>
@@ -107,215 +89,8 @@ export default function FeedbackModal({ onClose, onCreated }: FeedbackModalProps
   );
 }
 
-//Before Deploy update 2
 
-// import { useState } from "react";
-// import api from "../api/api";
-// import toast from "react-hot-toast";
 
-// interface FeedbackModalProps {
-//   onClose: () => void;
-//   onCreated: () => void;
-// }
-
-// export default function FeedbackModal({
-//   onClose,
-//   onCreated,
-// }: FeedbackModalProps) {
-//   const [form, setForm] = useState({
-//     name: "",
-//     message: "",
-//     email: "",
-//   });
-
-//   const [loading, setLoading] = useState(false);
-
-//   const submit = async () => {
-//     if (!form.name || !form.message) {
-//       toast.error("Name and feedback message are required");
-//       return;
-//     }
-
-//     try {
-//       setLoading(true);
-
-//       await api.post("/feedback", form);
-
-//       toast.success("Feedback submitted successfully!");
-
-//       // reset form
-//       setForm({
-//         name: "",
-//         message: "",
-//         email: "",
-//       });
-
-//       // refresh dashboard
-//       onCreated();
-//     } catch (error) {
-//       console.error(error); // ✅ now it's used
-//       toast.error("Error submitting feedback");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center">
-//       <div className="bg-white p-6 rounded-lg w-1/3 shadow-lg">
-//         <h2 className="text-lg font-bold mb-6">Submit Feedback</h2>
-
-//         {/* Name */}
-//         <div className="mb-5">
-//           <label className="block text-sm font-medium mb-1">Your Name</label>
-
-//           <input
-//             className="border border-gray-300 rounded-md p-2 w-full text-gray-700"
-//             placeholder="Zeshan Ahmed"
-//             value={form.name}
-//             onChange={(e) => setForm({ ...form, name: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Feedback */}
-//         <div className="mb-5">
-//           <label className="block text-sm font-medium mb-1">Feedback</label>
-
-//           <textarea
-//             className="border border-gray-300 rounded-md p-2 w-full text-gray-700"
-//             rows={4}
-//             placeholder="Describe your feedback..."
-//             value={form.message}
-//             onChange={(e) => setForm({ ...form, message: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Email */}
-//         <div className="mb-5">
-//           <label className="block text-sm font-medium mb-1">Email</label>
-
-//           <input
-//             className="border border-gray-300 rounded-md p-2 w-full text-gray-700"
-//             placeholder="you@example.com"
-//             value={form.email}
-//             onChange={(e) => setForm({ ...form, email: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Buttons */}
-//         <div className="flex justify-end gap-3">
-//           <button
-//             onClick={onClose}
-//             className="px-4 py-2 hover:bg-gray-100 rounded"
-//           >
-//             Cancel
-//           </button>
-
-//           <button
-//             onClick={submit}
-//             disabled={loading}
-//             className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
-//           >
-//             {loading ? "Submitting..." : "🚀 Submit"}
-//           </button>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-//Before Deploy update
-
-// import { useState } from "react";
-// import api from "../api/api";
-// import toast from "react-hot-toast";
-
-// interface FeedbackModalProps {
-//   onClose: () => void;
-//   onCreated: () => void;
-// }
-
-// export default function FeedbackModal({
-//   onClose,
-//   onCreated,
-// }: FeedbackModalProps) {
-// const [form, setForm] = useState({
-//   name: "",
-//   message: "",
-//   email: "",
-// });
-
-//   const [loading, setLoading] = useState(false);
-
-//   const submit = async () => {
-//     try {
-//       setLoading(true);
-//       await api.post("/feedback", form);
-//       toast.success("Feedback submitted successfully");
-//       onCreated();
-//       onClose();
-//     } catch {
-//       toast.error("Error submitting feedback");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center">
-//       <div className="bg-white p-6 rounded-lg w-1/4 shadow-lg">
-//         <h2 className="text-lg font-bold mb-6">Submit Feedback</h2>
-
-//         {/* Name */}
-//         <div className="mb-6">
-//           <label className="block text-sm font-medium mb-1">Your Name</label>
-//           <input
-//             className="border border-gray-300 rounded-md p-2 w-full text-gray-600 placeholder-gray-400"
-//             placeholder="Zeshan Ahmed"
-//             value={form.name}
-//             onChange={(e) => setForm({ ...form, name: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Feedback */}
-//         <div className="mb-6">
-//           <label className="block text-sm font-medium mb-1">Feedback</label>
-//           <textarea
-//             className="border border-gray-300 rounded-md p-2 w-full text-gray-600 placeholder-gray-400"
-//             placeholder="Describe your detail feedback here please..."
-//             value={form.message}
-//             onChange={(e) => setForm({ ...form, message: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Email */}
-//         <div className="mb-6">
-//           <label className="block text-sm font-medium mb-1">Email</label>
-//           <input
-//             className="border p-2 w-full mb-3 text-gray-600"
-//             placeholder="you@example.com"
-//             value={form.email}
-//             onChange={(e) => setForm({ ...form, email: e.target.value })}
-//           />
-//         </div>
-
-//         {/* Buttons */}
-//         <div className="flex justify-end gap-2">
-//           <button onClick={onClose} className="px-4 py-2  hover:bg-gray-100">
-//             Cancel
-//           </button>
-//           <button
-//             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
-//             onClick={submit}
-//             disabled={loading}
-//           >
-//             {loading ? "Submitting..." : "🚀 Submit"}
-//           </button>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
 // import { useState } from "react";
 // import api from "../api/api";
 // import toast from "react-hot-toast";
