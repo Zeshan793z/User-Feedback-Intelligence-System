@@ -69,6 +69,8 @@ const handleCreated = (feedback: Feedback) => {
 
   setNewFeedbackId(feedback._id);
 
+  setModal(false); // ✅ CLOSE MODAL
+
   setTimeout(() => {
     setNewFeedbackId(null);
   }, 2000);
