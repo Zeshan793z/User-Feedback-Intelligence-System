@@ -24,6 +24,8 @@ const TEAM_MAP: Record<FeedbackCategory, string> = {
 export const sendFeedbackEmail = async (feedback: any, teamEmail: string) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
+    port: 587,
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER!, // ✅ non-null assertion
       pass: process.env.EMAIL_PASS!,
@@ -48,18 +50,19 @@ Sentiment: ${feedback.sentiment}
 };
 
 // ✅ Helper to route feedback to the right team
-export const routeFeedbackEmail = async (feedback: { category: FeedbackCategory }) => {
+export const routeFeedbackEmail = async (feedback: {
+  category: FeedbackCategory;
+}) => {
   const teamEmail = TEAM_MAP[feedback.category] || process.env.TEAM_EMAIL!;
   await sendFeedbackEmail(feedback, teamEmail);
 };
-
 
 ///If rollback needed when gmail routing to differnt mailer or service provider
 
 // import nodemailer from "nodemailer";
 
 // // Define feedback categories for gmail routing if using production grade remove this
-// type FeedbackCategory = "billing" | "bug" | "feature" | "performance" 
+// type FeedbackCategory = "billing" | "bug" | "feature" | "performance"
 // | "general" | "complain" | "complements";
 
 // // Category → Team mapping
@@ -112,7 +115,6 @@ export const routeFeedbackEmail = async (feedback: { category: FeedbackCategory 
 //   const teamEmail = TEAM_MAP[feedback.category] || process.env.TEAM_EMAIL!;
 //   await sendFeedbackEmail(feedback, teamEmail);
 // };
-
 
 ///If rollback needed
 
