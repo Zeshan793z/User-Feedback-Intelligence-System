@@ -19,13 +19,19 @@ const { name, email, message } = req.body;
     });
 
     // ✅ Route email to correct team
-    await routeFeedbackEmail({
-      ...feedback.toObject(),
-      category: ai.category as FeedbackCategory,
-    });
+    // try email but don't fail API if email fails
+    try {
+      await routeFeedbackEmail({
+        ...feedback.toObject(),
+        category: ai.category as FeedbackCategory,
+      });
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+    }
 
     res.status(201).json(feedback);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Failed to create feedback" });
   }
 };
